@@ -4,8 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart' hide Position;
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:speech_to_text/speech_to_text.dart';
+import '../../../../core/services/voice_service.dart';
 
 import '../../../../features/auth/providers/auth_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -34,11 +33,10 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
   bool _isInitialLoad = true;
   bool _syncing = false;
 
-  // TTS & STT
-  final FlutterTts _tts = FlutterTts();
-  final SpeechToText _stt = SpeechToText();
+  // Voice state
   bool _isListening = false;
-  bool _sttAvailable = false;
+  int _listeningCountdown = 0;
+  Timer? _listenTimer;
 
   // Polling
   Timer? _pollTimer;
@@ -46,34 +44,15 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
   @override
   void initState() {
     super.initState();
-    _initTts();
-    _initStt();
     _pollTimer = Timer.periodic(const Duration(seconds: 6), (_) => _refresh());
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
-    _tts.stop();
-    _stt.stop();
+    _listenTimer?.cancel();
+    VoiceService.stop();
     super.dispose();
-  }
-
-  Future<void> _initTts() async {
-    await _tts.setLanguage('fr-FR');
-    await _tts.setSpeechRate(0.45);
-    await _tts.setVolume(1.0);
-    await _tts.setPitch(1.0);
-  }
-
-  Future<void> _initStt() async {
-    _sttAvailable = await _stt.initialize(
-      onStatus: (status) {
-        if ((status == 'done' || status == 'notListening') && mounted) {
-          setState(() => _isListening = false);
-        }
-      },
-    );
   }
 
   void _refresh() {
@@ -167,7 +146,7 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
               'Nouvelle mission : ${opp.pickupLocation} vers ${opp.deliveryDestination}. '
                   'Revenus supplémentaires : ${formatPrice(opp.additionalRevenue)}. '
                   'Dites oui pour accepter.';
-          await _speak(text);
+          await VoiceService.speak(text);
         }
       }
 
@@ -177,40 +156,48 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
     }
   }
 
-  Future<void> _speak(String text) async {
-    await _tts.stop();
-    await _tts.speak(text);
-  }
-
   Future<void> _startVoiceAccept(TransportOpportunity opp) async {
-    if (!_sttAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reconnaissance vocale indisponible')),
-      );
+    await VoiceService.stop();
+    final started = await VoiceService.startListening();
+    if (!started) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Microphone indisponible')),
+        );
+      }
       return;
     }
-    await _tts.stop();
-    setState(() => _isListening = true);
-    await _stt.listen(
-      onResult: (result) {
-        if (!result.finalResult) return;
-        final words = result.recognizedWords.toLowerCase();
+
+    const duration = 5;
+    setState(() {
+      _isListening = true;
+      _listeningCountdown = duration;
+    });
+
+    _listenTimer = Timer.periodic(const Duration(seconds: 1), (t) async {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      final remaining = _listeningCountdown - 1;
+      setState(() => _listeningCountdown = remaining);
+
+      if (remaining <= 0) {
+        t.cancel();
+        final words = await VoiceService.stopListening();
         if (mounted) setState(() => _isListening = false);
+        if (words == null) return;
         if (words.contains('oui') ||
             words.contains('accept') ||
             words.contains('ok') ||
             words.contains('accord')) {
           _acceptOpportunity(opp);
         } else if (words.contains('non') ||
-            words.contains('refus') ||
-            words.contains('pas')) {
+            words.contains('refus')) {
           _refuseOpportunity(opp);
         }
-      },
-      listenFor: const Duration(seconds: 6),
-      pauseFor: const Duration(seconds: 2),
-      localeId: 'fr_FR',
-    );
+      }
+    });
   }
 
   Future<void> _acceptOpportunity(TransportOpportunity opp) async {
@@ -336,14 +323,14 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
                           blurRadius: 16)
                     ],
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.mic_rounded, color: Colors.white, size: 16),
-                      SizedBox(width: 8),
+                      const Icon(Icons.mic_rounded, color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
                       Text(
-                        'Dites "oui" pour accepter…',
-                        style: TextStyle(color: Colors.white, fontSize: 13),
+                        'Parlez maintenant… ${_listeningCountdown}s',
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
                       ),
                     ],
                   ),
@@ -362,9 +349,7 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
                 isListening: _isListening,
                 onAccept: () => _acceptOpportunity(_selectedOpp!),
                 onRefuse: () => _refuseOpportunity(_selectedOpp!),
-                onVoice: _sttAvailable
-                    ? () => _startVoiceAccept(_selectedOpp!)
-                    : null,
+                onVoice: () => _startVoiceAccept(_selectedOpp!),
                 onDetails: () =>
                     context.push('/driver/missions/${_selectedOpp!.id}'),
                 onDismiss: () => setState(() => _selectedOpp = null),

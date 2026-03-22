@@ -30,9 +30,9 @@ dependencies:
   # Location
   geolocator: ^13.0.2
 
-  # Voice
-  speech_to_text: ^7.0.0
-  flutter_tts: ^4.2.0
+  # Voice (OpenAI TTS HD + Whisper via backend)
+  audioplayers: ^6.1.0
+  record: ^5.1.2
 
   # Notifications
   flutter_local_notifications: ^18.0.1
