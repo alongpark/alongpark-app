@@ -32,7 +32,7 @@ dependencies:
 
   # Voice (OpenAI TTS HD + Whisper via backend)
   audioplayers: ^6.1.0
-  record: ^5.1.2
+  record: ^5.0.0
 
   # Notifications
   flutter_local_notifications: ^18.0.1
@@ -54,6 +54,11 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   riverpod_generator: ^2.6.3
   build_runner: ^2.4.13
+
+dependency_overrides:
+  # record_linux 0.7.x manque startStream — forcer la version compatible
+  record_linux: ^1.3.0
+
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
