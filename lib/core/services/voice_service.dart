@@ -12,6 +12,28 @@ class VoiceService {
   static final _player = AudioPlayer();
   static final _recorder = AudioRecorder();
   static bool _recording = false;
+  static bool _initialized = false;
+
+  static Future<void> _init() async {
+    if (_initialized) return;
+    try {
+      if (Platform.isIOS) {
+        await AudioLogger.logLevel = LogLevel.error;
+        await _player.setAudioContext(const AudioContext(
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: {
+              AVAudioSessionOptions.duckOthers,
+              AVAudioSessionOptions.defaultToSpeaker,
+            },
+          ),
+        ));
+      }
+      _initialized = true;
+    } catch (e) {
+      debugPrint('[VoiceService] Init error: $e');
+    }
+  }
 
   static String get _ttsUrl => '${ApiClient.baseUrl}/api/voice/tts';
   static String get _sttUrl => '${ApiClient.baseUrl}/api/voice/stt';
@@ -20,6 +42,7 @@ class VoiceService {
 
   /// Retourne null si succès, ou un message d'erreur lisible si échec.
   static Future<String?> speak(String text, {String voice = 'shimmer'}) async {
+    await _init();
     await stop();
     try {
       final res = await http.post(
