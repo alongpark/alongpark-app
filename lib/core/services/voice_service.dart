@@ -18,8 +18,7 @@ class VoiceService {
     if (_initialized) return;
     try {
       if (Platform.isIOS) {
-        await AudioLogger.logLevel = LogLevel.error;
-        await _player.setAudioContext(const AudioContext(
+        await _player.setAudioContext(AudioContext(
           iOS: AudioContextIOS(
             category: AVAudioSessionCategory.playback,
             options: {
