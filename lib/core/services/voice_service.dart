@@ -20,13 +20,14 @@ class VoiceService {
       if (Platform.isIOS) {
         await _player.setAudioContext(AudioContext(
           iOS: AudioContextIOS(
-            category: AVAudioSessionCategory.playback,
+            category: AVAudioSessionCategory.playAndRecord,
             options: {
               AVAudioSessionOptions.duckOthers,
               AVAudioSessionOptions.defaultToSpeaker,
             },
           ),
         ));
+        await Future.delayed(const Duration(milliseconds: 500));
       }
       _initialized = true;
     } catch (e) {
@@ -66,8 +67,13 @@ class VoiceService {
         final tempDir = Directory.systemTemp;
         final file = File('${tempDir.path}/tts_output.mp3');
         await file.writeAsBytes(res.bodyBytes);
+        
+        final size = await file.length();
+        debugPrint('[VoiceService] TTS playing file: ${file.path} ($size bytes)');
 
+        await _player.setVolume(1.0);
         await _player.play(DeviceFileSource(file.path));
+        
         return null;
       } else {
         debugPrint('[VoiceService] TTS erreur ${res.statusCode}: ${res.body}');
