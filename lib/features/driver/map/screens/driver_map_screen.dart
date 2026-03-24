@@ -34,6 +34,9 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
   bool _isInitialLoad = true;
   bool _syncing = false;
 
+  final Set<String> _dismissedOppIds = {};
+  final Set<String> _notifiedOppIds = {};
+
   // Voice state
   bool _isListening = false;
   int _listeningCountdown = 0;
@@ -45,7 +48,7 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
   @override
   void initState() {
     super.initState();
-    _pollTimer = Timer.periodic(const Duration(seconds: 6), (_) => _refresh());
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) => _refresh());
   }
 
   @override
@@ -100,16 +103,20 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
     } catch (_) {}
   }
 
-  Future<void> _syncOpportunities(List<TransportOpportunity> newList) async {
+  Future<void> _syncOpportunities(List<TransportOpportunity> rawList) async {
     if (_circleManager == null || _syncing) return;
     _syncing = true;
 
     try {
+      // Filter out dismissed ones
+      final newList = rawList.where((o) => !_dismissedOppIds.contains(o.id)).toList();
       final newIds = newList.map((o) => o.id).toSet();
       final currentIds = Set<String>.from(_circleByOppId.keys);
 
-      // Remove stale circles
+      // Remove stale circles (except if it's the currently selected one!)
       for (final id in currentIds.difference(newIds)) {
+        if (id == _selectedOpp?.id) continue; // Keep selected one sticky
+
         final circle = _circleByOppId.remove(id);
         if (circle != null) {
           _oppByCircleId.remove(circle.id);
@@ -121,21 +128,21 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
 
       // Add new circles
       for (final opp in newList.where((o) => !currentIds.contains(o.id))) {
-        final isNew = !_isInitialLoad;
         final circle = await _circleManager!.create(CircleAnnotationOptions(
           geometry: Point(coordinates: Position(opp.pickupLng, opp.pickupLat)),
-          circleRadius: isNew ? 16.0 : 12.0,
-          circleColor: isNew
-              ? AppColors.warning.value
-              : const Color(0xFF0B1E3D).value,
+          circleRadius: 12.0,
+          circleColor: const Color(0xFF0B1E3D).value,
           circleStrokeWidth: 3.0,
           circleStrokeColor: Colors.white.value,
         ));
         _circleByOppId[opp.id] = circle;
         _oppByCircleId[circle.id] = opp;
 
-        if (isNew) {
+        // Auto-select and notify by voice ONLY if we've never seen this ID before in this session
+        if (!_isInitialLoad && !_notifiedOppIds.contains(opp.id)) {
+          _notifiedOppIds.add(opp.id);
           if (mounted) setState(() => _selectedOpp = opp);
+          
           await _map?.flyTo(
             CameraOptions(
               center: Point(coordinates: Position(opp.pickupLng, opp.pickupLat)),
@@ -143,17 +150,18 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
             ),
             MapAnimationOptions(duration: 800),
           );
+          
           final text = opp.clientVoiceInstruction ??
               'Nouvelle mission : ${opp.pickupLocation} vers ${opp.deliveryDestination}. '
                   'Revenus supplémentaires : ${formatPrice(opp.additionalRevenue)}. '
                   'Dites oui pour accepter.';
+          
           final ttsError = await VoiceService.speak(text);
           if (ttsError != null && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Voix IA indisponible : $ttsError'),
-                duration: const Duration(seconds: 6),
-                backgroundColor: Colors.red.shade700,
+                content: Text('Voix IA : $ttsError'),
+                duration: const Duration(seconds: 4),
               ),
             );
           }
@@ -364,7 +372,18 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
                 onVoice: () => _startVoiceAccept(_selectedOpp!),
                 onDetails: () =>
                     context.push('/driver/missions/${_selectedOpp!.id}'),
-                onDismiss: () => setState(() => _selectedOpp = null),
+                onDismiss: () {
+                  final id = _selectedOpp?.id;
+                  if (id != null) {
+                    _dismissedOppIds.add(id);
+                    final circle = _circleByOppId.remove(id);
+                    if (circle != null) {
+                      _oppByCircleId.remove(circle.id);
+                      _circleManager?.delete(circle);
+                    }
+                  }
+                  setState(() => _selectedOpp = null);
+                },
               ),
             ),
         ],
