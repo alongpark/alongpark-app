@@ -12,7 +12,8 @@ typedef _EstimationResult = ({
   String type,
   double weightKg,
   double volumeM3,
-  double bx, double by, double bw, double bh, // bounding box 0-1
+  double bx, double by, double bw, double bh, // bounding box 2D fallback
+  List<Offset>? corners, // 8 points pour la box 3D
 });
 
 class ScanEstimateScreen extends StatefulWidget {
@@ -110,7 +111,15 @@ class _ScanEstimateScreenState extends State<ScanEstimateScreen>
       if (!mounted) return;
       _stepTimer?.cancel();
 
-      final bbox = data['bbox'] as Map<String, dynamic>? ?? {};
+      final cornersData = data['projected_corners'] as List<dynamic>?;
+      List<Offset>? corners;
+      if (cornersData != null && cornersData.length == 8) {
+        corners = cornersData.map((e) {
+          final m = e as Map<String, dynamic>;
+          return Offset((m['x'] as num).toDouble(), (m['y'] as num).toDouble());
+        }).toList();
+      }
+
       _result = (
         type:     data['estimated_type'] as String,
         weightKg: (data['estimated_weight_kg'] as num).toDouble(),
@@ -119,6 +128,7 @@ class _ScanEstimateScreenState extends State<ScanEstimateScreen>
         by: _parseBbox(bbox['y'], 0.20),
         bw: _parseBbox(bbox['w'], 0.70),
         bh: _parseBbox(bbox['h'], 0.60),
+        corners: corners,
       );
     } catch (e) {
       if (!mounted) return;
@@ -166,7 +176,7 @@ class _ScanEstimateScreenState extends State<ScanEstimateScreen>
           else
             Container(color: Colors.black.withValues(alpha: 0.35)),
 
-          // ── Contour détecté (remplacé par Subject Segmentation)
+          // ── Contour détecté (Subject Segmentation)
           if (_showResult && _foregroundBitmap != null && _error == null)
             AnimatedBuilder(
               animation: _resultAnim,
@@ -178,6 +188,32 @@ class _ScanEstimateScreenState extends State<ScanEstimateScreen>
                   width: double.infinity,
                   height: double.infinity,
                 ),
+              ),
+            ),
+          
+          // ── Box 3D Artificielle (AR Style)
+          if (_showResult && _result != null && _error == null)
+            AnimatedBuilder(
+              animation: _resultAnim,
+              builder: (_, __) => LayoutBuilder(
+                builder: (context, constraints) {
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _BBoxPainter(
+                            result: _result!,
+                            progress: _resultAnim.value,
+                          ),
+                        ),
+                      ),
+                      
+                      // Étiquette de volume flottante
+                      if (_resultAnim.value > 0.8)
+                        _buildVolumeTag(constraints, _result!),
+                    ],
+                  );
+                },
               ),
             ),
 
@@ -554,65 +590,65 @@ class _Divider extends StatelessWidget {
 
 // ── Bounding box painter — contour détecté par l'IA ──────────────────────────
 class _BBoxPainter extends CustomPainter {
-  final double progress; // 0→1 pour l'animation d'apparition
+  final _EstimationResult result;
+  final double progress;
 
-  const _BBoxPainter({required this.progress});
+  const _BBoxPainter({required this.result, required this.progress});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.accent.withValues(alpha: 0.85 * progress)
-      ..strokeWidth = 2.0
+      ..color = Colors.white.withValues(alpha: 0.9 * progress)
+      ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
 
-    final glowPaint = Paint()
-      ..color = AppColors.accent.withValues(alpha: 0.25 * progress)
-      ..strokeWidth = 6.0
-      ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-
-    final rect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      const Radius.circular(8),
-    );
-
-    // Glow
-    canvas.drawRRect(rect, glowPaint);
-    // Contour net
-    canvas.drawRRect(rect, paint);
-
-    // Remplissage (Surbrillance de l'objet)
-    final fillPaint = Paint()
-      ..color = AppColors.accent.withValues(alpha: 0.18 * progress)
+    final dotPaint = Paint()
+      ..color = Colors.white.withValues(alpha: progress)
       ..style = PaintingStyle.fill;
-    canvas.drawRRect(rect, fillPaint);
 
-    // Étiquette "IA détecté" en haut à gauche
-    if (progress > 0.8) {
-      final labelPaint = Paint()
-        ..color = AppColors.accent.withValues(alpha: progress)
-        ..style = PaintingStyle.fill;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          const Rect.fromLTWH(0, -22, 80, 18),
-          const Radius.circular(4),
-        ),
-        labelPaint,
+    if (result.corners != null && result.corners!.length == 8) {
+      final pts = result.corners!.map((p) => Offset(p.dx * size.width, p.dy * size.height)).toList();
+
+      // Dessiner les arêtes de la box 3D
+      // Face inférieure (0,1,2,3)
+      _drawFace(canvas, pts.sublist(0, 4), paint);
+      // Face supérieure (4,5,6,7)
+      _drawFace(canvas, pts.sublist(4, 8), paint);
+      // Arêtes verticales (0-4, 1-5, 2-6, 3-7)
+      for (int i = 0; i < 4; i++) {
+        canvas.drawLine(pts[i], pts[i + 4], paint);
+      }
+
+      // Dessiner les points aux sommets (White Dots)
+      for (var p in pts) {
+        canvas.drawCircle(p, 4, dotPaint);
+      }
+    } else {
+      // Fallback 2D rect si on n'a pas les corners
+      final rect = Rect.fromLTWH(
+        result.bx * size.width,
+        result.by * size.height,
+        result.bw * size.width,
+        result.bh * size.height,
       );
-
-      final tp = TextPainter(
-        text: TextSpan(
-          text: ' IA détecté',
-          style: TextStyle(
-            color: Colors.black.withValues(alpha: progress),
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, const Offset(2, -21));
+      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(8)), paint);
+      
+      // Points aux coins
+      canvas.drawCircle(rect.topLeft, 4, dotPaint);
+      canvas.drawCircle(rect.topRight, 4, dotPaint);
+      canvas.drawCircle(rect.bottomLeft, 4, dotPaint);
+      canvas.drawCircle(rect.bottomRight, 4, dotPaint);
     }
+  }
+
+  void _drawFace(Canvas canvas, List<Offset> pts, Paint paint) {
+    final path = Path()
+      ..moveTo(pts[0].dx, pts[0].dy)
+      ..lineTo(pts[1].dx, pts[1].dy)
+      ..lineTo(pts[2].dx, pts[2].dy)
+      ..lineTo(pts[3].dx, pts[3].dy)
+      ..close();
+    canvas.drawPath(path, paint);
   }
 
   @override
