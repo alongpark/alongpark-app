@@ -19,7 +19,7 @@ class VoiceService {
   // ── TTS ──────────────────────────────────────────────────────────────────
 
   /// Retourne null si succès, ou un message d'erreur lisible si échec.
-  static Future<String?> speak(String text, {String voice = 'nova'}) async {
+  static Future<String?> speak(String text, {String voice = 'shimmer'}) async {
     await stop();
     try {
       final res = await http.post(

@@ -152,9 +152,9 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
           );
           
           final text = opp.clientVoiceInstruction ??
-              'Nouvelle mission : ${opp.pickupLocation} vers ${opp.deliveryDestination}. '
-                  'Revenus supplémentaires : ${formatPrice(opp.additionalRevenue)}. '
-                  'Dites oui pour accepter.';
+              'Bonjour ! J\'ai une nouvelle mission pour vous. Elle part de ${opp.pickupLocation} pour aller à ${opp.deliveryDestination}. '
+                  'Cela vous rapporterait ${formatPrice(opp.additionalRevenue)} de plus. '
+                  'Qu\'en pensez-vous ?';
           
           final ttsError = await VoiceService.speak(text);
           if (ttsError != null && mounted) {
@@ -204,18 +204,49 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
         t.cancel();
         final words = await VoiceService.stopListening();
         if (mounted) setState(() => _isListening = false);
-        if (words == null) return;
-        if (words.contains('oui') ||
-            words.contains('accept') ||
-            words.contains('ok') ||
-            words.contains('accord')) {
-          _acceptOpportunity(opp);
-        } else if (words.contains('non') ||
-            words.contains('refus')) {
-          _refuseOpportunity(opp);
-        }
+        if (words == null || words.isEmpty) return;
+        
+        // On passe par l'IA pour comprendre l'intention
+        _handleDriverConversation(words, opp);
       }
     });
+  }
+
+  Future<void> _handleDriverConversation(String userText, TransportOpportunity opp) async {
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiClient.baseUrl}/api/conversation/driver'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'opportunity_id': opp.id,
+          'user_text': userText,
+        }),
+      ).timeout(const Duration(seconds: 20));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final intent = data['intent'] as String;
+        final responseText = data['response_text'] as String;
+        final needsReply = data['needs_reply'] as bool;
+
+        await VoiceService.speak(responseText);
+
+        if (intent == 'ACCEPT') {
+          _acceptOpportunity(opp);
+        } else if (intent == 'REFUSE') {
+          _refuseOpportunity(opp);
+        } else if (needsReply) {
+          // On attend que l'IA finisse son speech (env 4s) avant d'écouter à nouveau
+          Future.delayed(const Duration(seconds: 4), () {
+            if (mounted && _selectedOpp?.id == opp.id) {
+              _startVoiceAccept(opp);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('[DriverMap] Conversation error: $e');
+    }
   }
 
   Future<void> _acceptOpportunity(TransportOpportunity opp) async {
