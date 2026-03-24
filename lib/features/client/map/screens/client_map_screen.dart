@@ -270,12 +270,62 @@ class _ClientMapScreenState extends ConsumerState<ClientMapScreen> {
   }
 
   // ── Camera + Scan ───────────────────────────────────────────────────────────
-  Future<void> _openCamera() async {
+  Future<void> _onPickImagePressed() async {
+    final c = AppColors.of(context);
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Source de l\'image', 
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.textPrimary)
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _SourceTile(
+                    icon: Icons.camera_alt_rounded,
+                    label: 'Appareil photo',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _pickImage(img_picker.ImageSource.camera);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _SourceTile(
+                    icon: Icons.photo_library_rounded,
+                    label: 'Galerie photo',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _pickImage(img_picker.ImageSource.gallery);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(img_picker.ImageSource source) async {
     if (_isEstimating) return;
 
     final picker = img_picker.ImagePicker();
     final image = await picker.pickImage(
-      source: img_picker.ImageSource.camera,
+      source: source,
       imageQuality: 75,
       maxWidth: 1080,
       maxHeight: 1080,
@@ -445,7 +495,7 @@ class _ClientMapScreenState extends ConsumerState<ClientMapScreen> {
                       .setMerchandiseInfo(weightKg: kg);
                 }
               },
-              onCamera: _openCamera,
+              onPickImage: _onPickImagePressed,
               isEstimating: _isEstimating,
               onSearch: _search,
               onConfirm: _confirm,
@@ -479,7 +529,7 @@ class _Sheet extends StatelessWidget {
   final void Function(_Place) onSelectDestination;
   final TextEditingController weightController;
   final void Function(String) onWeightChanged;
-  final VoidCallback onCamera;
+  final VoidCallback onPickImage;
   final bool isEstimating;
   final VoidCallback onSearch;
   final VoidCallback onConfirm;
@@ -498,7 +548,7 @@ class _Sheet extends StatelessWidget {
     required this.onSelectDestination,
     required this.weightController,
     required this.onWeightChanged,
-    required this.onCamera,
+    required this.onPickImage,
     required this.isEstimating,
     required this.onSearch,
     required this.onConfirm,
@@ -618,7 +668,7 @@ class _Sheet extends StatelessWidget {
           isEstimating: isEstimating,
           state: state,
           onDestinationChanged: onDestinationChanged,
-          onCamera: onCamera,
+          onPickImage: onPickImage,
           onWeightChanged: onWeightChanged,
         ),
 
@@ -874,7 +924,7 @@ class _JourneyCard extends StatelessWidget {
   final bool isEstimating;
   final SendRequestState state;
   final void Function(String) onDestinationChanged;
-  final VoidCallback onCamera;
+  final VoidCallback onPickImage;
   final void Function(String) onWeightChanged;
 
   const _JourneyCard({
@@ -885,7 +935,7 @@ class _JourneyCard extends StatelessWidget {
     required this.isEstimating,
     required this.state,
     required this.onDestinationChanged,
-    required this.onCamera,
+    required this.onPickImage,
     required this.onWeightChanged,
   });
 
@@ -971,11 +1021,11 @@ class _JourneyCard extends StatelessWidget {
                       state: state,
                       weightController: weightController,
                       onWeightChanged: onWeightChanged,
-                      onRetake: onCamera,
+                      onRetake: onPickImage,
                     )
                   : _MeasureRow(
                       isEstimating: isEstimating,
-                      onTap: onCamera,
+                      onTap: onPickImage,
                     ),
             ),
           ],
@@ -1099,6 +1149,43 @@ class _EstimationRow extends StatelessWidget {
                   fontWeight: FontWeight.w500)),
         ),
       ],
+    );
+  }
+}
+
+class _SourceTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _SourceTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    return Material(
+      color: c.card,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            children: [
+              Icon(icon, color: AppColors.primary, size: 28),
+              const SizedBox(height: 10),
+              Text(label, 
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.textPrimary)
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

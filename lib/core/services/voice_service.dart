@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:record/record.dart';
@@ -17,19 +18,31 @@ class VoiceService {
 
   // ── TTS ──────────────────────────────────────────────────────────────────
 
-  static Future<void> speak(String text, {String voice = 'nova'}) async {
+  /// Retourne null si succès, ou un message d'erreur lisible si échec.
+  static Future<String?> speak(String text, {String voice = 'nova'}) async {
     await stop();
     try {
       final res = await http.post(
         Uri.parse(_ttsUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'text': text, 'voice': voice}),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 20));
 
       if (res.statusCode == 200) {
+        if (res.bodyBytes.isEmpty) {
+          debugPrint('[VoiceService] TTS: réponse vide');
+          return 'Réponse TTS vide';
+        }
         await _player.play(BytesSource(res.bodyBytes));
+        return null;
+      } else {
+        debugPrint('[VoiceService] TTS erreur ${res.statusCode}: ${res.body}');
+        return 'TTS ${res.statusCode}: ${res.body}';
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[VoiceService] TTS exception: $e');
+      return e.toString();
+    }
   }
 
   static Future<void> stop() async {
@@ -41,7 +54,10 @@ class VoiceService {
   static Future<bool> startListening() async {
     try {
       final hasPermission = await _recorder.hasPermission();
-      if (!hasPermission) return false;
+      if (!hasPermission) {
+        debugPrint('[VoiceService] STT: permission microphone refusée');
+        return false;
+      }
       final path = '${Directory.systemTemp.path}/voice_input.wav';
       await _recorder.start(
         const RecordConfig(
@@ -53,7 +69,8 @@ class VoiceService {
       );
       _recording = true;
       return true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[VoiceService] startListening exception: $e');
       return false;
     }
   }
@@ -79,8 +96,11 @@ class VoiceService {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         return (data['text'] as String?)?.toLowerCase().trim();
+      } else {
+        debugPrint('[VoiceService] STT erreur ${res.statusCode}: ${res.body}');
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[VoiceService] stopListening exception: $e');
       _recording = false;
     }
     return null;
