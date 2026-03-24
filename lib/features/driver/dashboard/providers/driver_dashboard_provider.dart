@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../shared/models/truck_state.dart';
-import '../../../../shared/repositories/mock/mock_driver_repository.dart';
+import '../../../../shared/repositories/api/api_driver_repository.dart';
 
-final driverRepoProvider = Provider((_) => MockDriverRepository());
+final driverRepoProvider = Provider((_) => ApiDriverRepository());
 
 final truckStateProvider =
     FutureProvider.family<TruckState, String>((ref, driverId) async {

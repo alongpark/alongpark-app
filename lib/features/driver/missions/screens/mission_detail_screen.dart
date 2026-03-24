@@ -236,7 +236,7 @@ class MissionDetailScreen extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.of(context).card,
                   border:
                       Border(top: BorderSide(color: AppColors.of(context).border)),
                 ),

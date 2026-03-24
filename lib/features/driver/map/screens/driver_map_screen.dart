@@ -8,6 +8,7 @@ import '../../../../core/services/voice_service.dart';
 
 import '../../../../features/auth/providers/auth_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_provider.dart';
 import '../../../../shared/models/transport_opportunity.dart';
 import '../../missions/providers/missions_provider.dart';
 import '../../../../core/utils/formatters.dart';
@@ -146,7 +147,16 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
               'Nouvelle mission : ${opp.pickupLocation} vers ${opp.deliveryDestination}. '
                   'Revenus supplémentaires : ${formatPrice(opp.additionalRevenue)}. '
                   'Dites oui pour accepter.';
-          await VoiceService.speak(text);
+          final ttsError = await VoiceService.speak(text);
+          if (ttsError != null && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Voix IA indisponible : $ttsError'),
+                duration: const Duration(seconds: 6),
+                backgroundColor: Colors.red.shade700,
+              ),
+            );
+          }
         }
       }
 
@@ -255,7 +265,9 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
               center: Point(coordinates: Position(2.3522, 48.8566)),
               zoom: 5.0,
             ),
-            styleUri: MapboxStyles.LIGHT,
+            styleUri: ref.watch(themeModeProvider) == ThemeMode.dark
+                ? MapboxStyles.DARK
+                : MapboxStyles.LIGHT,
             textureView: true,
             onMapCreated: _onMapCreated,
           ),
@@ -276,10 +288,10 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
                       const SizedBox(width: 6),
                       Text(
                         user?.name ?? '',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
-                          color: AppColors.primary,
+                          color: AppColors.of(context).textPrimary,
                         ),
                       ),
                     ],
@@ -289,8 +301,8 @@ class _DriverMapScreenState extends ConsumerState<DriverMapScreen> {
                 _Chip(
                   padding: const EdgeInsets.all(4),
                   child: IconButton(
-                    icon: const Icon(Icons.logout_rounded,
-                        size: 18, color: AppColors.primary),
+                    icon: Icon(Icons.logout_rounded,
+                        size: 18, color: AppColors.of(context).textPrimary),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
                         minWidth: 32, minHeight: 32),
@@ -384,10 +396,11 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: c.card,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(

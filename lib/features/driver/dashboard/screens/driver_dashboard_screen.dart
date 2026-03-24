@@ -5,6 +5,7 @@ import '../providers/driver_dashboard_provider.dart';
 import '../../missions/providers/missions_provider.dart';
 import '../../../../features/auth/providers/auth_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/widgets/nux_card.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/utils/formatters.dart';
@@ -41,6 +42,18 @@ class DriverDashboardScreen extends ConsumerWidget {
               ),
             ),
             actions: [
+              Consumer(builder: (context, ref, _) {
+                final mode = ref.watch(themeModeProvider);
+                final isDark = mode == ThemeMode.dark;
+                return IconButton(
+                  icon: Icon(
+                    isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                    size: 20,
+                  ),
+                  onPressed: () => ref.read(themeModeProvider.notifier).state =
+                      isDark ? ThemeMode.light : ThemeMode.dark,
+                );
+              }),
               IconButton(
                 icon: const Icon(Icons.logout_rounded, size: 20),
                 onPressed: () {

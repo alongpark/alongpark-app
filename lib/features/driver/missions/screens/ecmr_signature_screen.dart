@@ -20,7 +20,7 @@ class _EcmrSignatureScreenState extends ConsumerState<EcmrSignatureScreen> {
   final SignatureController _signatureController = SignatureController(
     penStrokeWidth: 4,
     penColor: AppColors.primary,
-    exportBackgroundColor: Colors.white,
+    exportBackgroundColor: Colors.white, // Export always white for standard
   );
   
   bool _isSigned = false;
@@ -66,7 +66,7 @@ class _EcmrSignatureScreenState extends ConsumerState<EcmrSignatureScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.of(ctx).surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -80,15 +80,15 @@ class _EcmrSignatureScreenState extends ConsumerState<EcmrSignatureScreen> {
               child: const Icon(Icons.check_rounded, color: Colors.white, size: 40),
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'Livraison validée',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.of(context).textPrimary),
             ),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'La e-CMR a été signée numériquement et envoyée au destinataire ainsi qu\'à l\'expéditeur.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.black54),
+              style: TextStyle(fontSize: 14, color: AppColors.of(context).textSecondary),
             ),
             const SizedBox(height: 24),
             if (_signatureBytes != null)
@@ -149,7 +149,7 @@ class _EcmrSignatureScreenState extends ConsumerState<EcmrSignatureScreen> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.of(context).card,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: AppColors.of(context).border),
                   ),
@@ -160,7 +160,7 @@ class _EcmrSignatureScreenState extends ConsumerState<EcmrSignatureScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Récépissé de transport', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
-                          Text('#${opp.id.substring(0, 6).toUpperCase()}', style: const TextStyle(color: Colors.grey)),
+                          Text('#${opp.id.substring(0, 6).toUpperCase()}', style: TextStyle(color: AppColors.of(context).textMuted)),
                         ],
                       ),
                       const Divider(height: 30),
@@ -182,9 +182,9 @@ class _EcmrSignatureScreenState extends ConsumerState<EcmrSignatureScreen> {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary),
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Tracez votre signature ci-dessous pour certifier la bonne réception de la marchandise.',
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                  style: TextStyle(fontSize: 14, color: AppColors.of(context).textMuted),
                 ),
                 const SizedBox(height: 16),
                 
@@ -201,7 +201,7 @@ class _EcmrSignatureScreenState extends ConsumerState<EcmrSignatureScreen> {
                         Signature(
                           controller: _signatureController,
                           height: 250,
-                          backgroundColor: Colors.white,
+                          backgroundColor: Colors.white, // Standard for signature
                         ),
                         if (_isSigned)
                           Positioned(
@@ -238,7 +238,7 @@ class _EcmrSignatureScreenState extends ConsumerState<EcmrSignatureScreen> {
                     label: const Text('Valider la livraison', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.compatibleCertain,
-                      disabledBackgroundColor: Colors.grey.shade300,
+                      disabledBackgroundColor: AppColors.of(context).border,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                   ),
