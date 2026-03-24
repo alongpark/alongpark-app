@@ -26,14 +26,26 @@ class VoiceService {
         Uri.parse(_ttsUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'text': text, 'voice': voice}),
-      ).timeout(const Duration(seconds: 20));
+      ).timeout(const Duration(seconds: 25));
 
       if (res.statusCode == 200) {
+        final contentType = res.headers['content-type'];
+        if (contentType != null && !contentType.contains('audio')) {
+          debugPrint('[VoiceService] TTS: réponse non-audio: $contentType - ${res.body}');
+          return 'Erreur serveur (non-audio): ${res.body.substring(0, 50)}...';
+        }
+
         if (res.bodyBytes.isEmpty) {
           debugPrint('[VoiceService] TTS: réponse vide');
           return 'Réponse TTS vide';
         }
-        await _player.play(BytesSource(res.bodyBytes));
+
+        // Sur iOS, BytesSource peut être instable. On passe par un fichier temporaire.
+        final tempDir = Directory.systemTemp;
+        final file = File('${tempDir.path}/tts_output.mp3');
+        await file.writeAsBytes(res.bodyBytes);
+
+        await _player.play(DeviceFileSource(file.path));
         return null;
       } else {
         debugPrint('[VoiceService] TTS erreur ${res.statusCode}: ${res.body}');
@@ -41,7 +53,7 @@ class VoiceService {
       }
     } catch (e) {
       debugPrint('[VoiceService] TTS exception: $e');
-      return e.toString();
+      return 'Erreur de lecture audio (iOS) : ${e.toString()}';
     }
   }
 
