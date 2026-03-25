@@ -111,6 +111,7 @@ class _ScanEstimateScreenState extends State<ScanEstimateScreen>
       if (!mounted) return;
       _stepTimer?.cancel();
 
+      final bbox = data['bbox'] as Map<String, dynamic>? ?? {};
       final cornersData = data['projected_corners'] as List<dynamic>?;
       List<Offset>? corners;
       if (cornersData != null && cornersData.length == 8) {
@@ -145,6 +146,61 @@ class _ScanEstimateScreenState extends State<ScanEstimateScreen>
     _stepTimer?.cancel();
     _resultController.dispose();
     super.dispose();
+  }
+
+  Widget _buildVolumeTag(BoxConstraints constraints, _EstimationResult result) {
+    double minY = 1.0;
+    double topX = 0.5;
+    if (result.corners != null) {
+      for (var p in result.corners!) {
+        if (p.dy < minY) {
+          minY = p.dy;
+          topX = p.dx;
+        }
+      }
+    } else {
+      minY = result.by;
+      topX = result.bx + result.bw / 2;
+    }
+
+    return Positioned(
+      left: topX * constraints.maxWidth - 45,
+      top: minY * constraints.maxHeight - 55,
+      child: FadeTransition(
+        opacity: _resultAnim,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${result.volumeM3.toStringAsFixed(2)} m³',
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              CustomPaint(
+                size: const Size(10, 5),
+                painter: _ArrowPainter(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -653,4 +709,19 @@ class _BBoxPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BBoxPainter old) => old.progress != progress;
+}
+
+class _ArrowPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
